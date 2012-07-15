@@ -413,6 +413,9 @@ extern struct cpufreq_governor cpufreq_gov_pegasusq;
 #elif defined(CONFIG_CPU_FREQ_DEFAULT_GOV_LULZACTIVE)
 extern struct cpufreq_governor cpufreq_gov_lulzactive;
 #define CPUFREQ_DEFAULT_GOVERNOR	(&cpufreq_gov_lulzactive)
+#elif defined(CONFIG_CPU_FREQ_DEFAULT_GOV_FANTASY)
+extern struct cpufreq_governor cpufreq_gov_fantasy;
+#define CPUFREQ_DEFAULT_GOVERNOR	(&cpufreq_gov_fantasy)
 #endif
 
 
