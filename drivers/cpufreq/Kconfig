@@ -123,6 +123,10 @@ config CPU_FREQ_DEFAULT_GOV_PEGASUSQ
 	bool "pegasusq"
 	select CPU_FREQ_GOV_PEGASUSQ
 
+config CPU_FREQ_DEFAULT_GOV_LULZACTIVE
+	bool "lulzactive"
+    select CPU_FREQ_GOV_LULZACTIVE
+
 endchoice
 
 config CPU_FREQ_GOV_PERFORMANCE
@@ -243,6 +247,14 @@ config CPU_FREQ_GOV_ADAPTIVE
 
 config CPU_FREQ_GOV_PEGASUSQ
 	tristate "'pegasusq' cpufreq policy governor"
+
+config CPU_FREQ_GOV_LULZACTIVE
+	tristate "'lulzactive' cpufreq governor"
+	depends on CPU_FREQ
+	help
+	  'lulzactive' - a new interactive governor by Tegrak!
+
+	  If in doubt, say N.
 
 config SEC_DVFS
 	bool "DVFS job"
