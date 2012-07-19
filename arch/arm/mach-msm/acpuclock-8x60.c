@@ -45,7 +45,7 @@
 /* PLL calibration limits.
  * The PLL hardware has a minimum frequency of 384MHz.
  * Calibration should respect this limit. */
-#define L_VAL_SCPLL_CAL_MIN	0x08 /* =  432 MHz with 27MHz source */
+#define L_VAL_SCPLL_CAL_MIN	0x06 /* =  324 MHz with 27MHz source */
 
 #define MAX_VDD_SC		1350000 /* uV */
 #define MIN_VDD_SC		 700000 /* uV */
@@ -164,6 +164,7 @@ static struct msm_bus_paths bw_level_tbl[] = {
 	[2] = BW_MBPS(2008), /* At least 251 MHz on bus. */
 	[3] = BW_MBPS(2480), /* At least 310 MHz on bus. */
 	[4] = BW_MBPS(3200), /* At least 400 MHz on bus. */
+	[5] = BW_MBPS(3464), /* At least 433 MHz on bus. */
 };
 
 static struct msm_bus_scale_pdata bus_client_pdata = {
@@ -196,8 +197,8 @@ static struct clkctl_l2_speed l2_freq_tbl_v2[] = {
 	[16] = {1242000,  1, 0x17, 1200000, 1212500, 3},
 	[17] = {1296000,  1, 0x18, 1200000, 1225000, 3},
 	[18] = {1350000,  1, 0x19, 1200000, 1225000, 3},
-	[19] = {1404000,  1, 0x1A, 1200000, 1250000, 3},
-	[20] = {1620000,  1, 0x1E, 1250000, 1275000, 4},
+	[19] = {1404000,  1, 0x1A, 1200000, 1250000, 4},
+	[20] = {1620000,  1, 0x1E, 1250000, 1275000, 5},
 };
 
 #define L2(x) (&l2_freq_tbl_v2[(x)])
@@ -309,8 +310,8 @@ static struct clkctl_acpu_speed acpu_freq_tbl_slow[] = {
   { {1, 1}, 1674000,  ACPU_SCPLL, 0, 0, 1, 0x1F, L2(20), 1250000, 0x03006000},
   { {1, 1}, 1728000,  ACPU_SCPLL, 0, 0, 1, 0x20, L2(20), 1275000, 0x03006000},
   { {1, 1}, 1782000,  ACPU_SCPLL, 0, 0, 1, 0x21, L2(20), 1300000, 0x03006000},
-  { {1, 1}, 1836000,  ACPU_SCPLL, 0, 0, 1, 0x22, L2(20), 1300000, 0x03006000},
-  { {1, 1}, 1890000,  ACPU_SCPLL, 0, 0, 1, 0x23, L2(20), 1325000, 0x03006000},
+  { {1, 1}, 1836000,  ACPU_SCPLL, 0, 0, 1, 0x22, L2(20), 1325000, 0x03006000},
+  { {1, 1}, 1890000,  ACPU_SCPLL, 0, 0, 1, 0x23, L2(20), 1350000, 0x03006000},
   { {0, 0}, 0 },
 };
 
