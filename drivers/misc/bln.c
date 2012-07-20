@@ -2,6 +2,7 @@
  *
  * Copyright 2011  Michael Richter (alias neldar)
  * Copyright 2011  Adam Kent <adam@semicircular.net>
+ * Copyright 2012  Jeffrey Clark <h0tw1r3@gmail.com>
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 as
@@ -33,9 +34,13 @@ static struct timer_list blink_timer =
 		TIMER_INITIALIZER(bl_timer_callback, 0, 0);
 static void blink_callback(struct work_struct *blink_work);
 static DECLARE_WORK(blink_work, blink_callback);
+static void blink_cancel(void);
 
-#define BLINK_INTERVAL 500 /* on / off every 500ms */
-#define MAX_BLINK_COUNT 600 /* 10 minutes */
+static uint32_t blink_on_msec = 500;
+static uint32_t blink_off_msec = 500;
+static uint32_t blink_wait_msec = 0;
+static uint32_t max_blink_count = 300;
+
 #define BACKLIGHTNOTIFICATION_VERSION 9
 
 static void bln_enable_backlights(void)
@@ -76,8 +81,8 @@ static void enable_led_notification(void)
 
 		/* Start timer */
 		blink_timer.expires = jiffies +
-				msecs_to_jiffies(BLINK_INTERVAL);
-		blink_count = MAX_BLINK_COUNT;
+				msecs_to_jiffies(blink_on_msec);
+		blink_count = max_blink_count;
 		add_timer(&blink_timer);
 	}
 
@@ -90,14 +95,10 @@ static void disable_led_notification(void)
 {
 	pr_info("%s: notification led disabled\n", __FUNCTION__);
 
-	bln_blink_state = 0;
-	bln_ongoing = false;
-
 	if (bln_suspended)
 		bln_disable_backlights();
 
-	if (in_kernel_blink)
-		del_timer(&blink_timer);
+	blink_cancel();
 
 	wake_unlock(&bln_wake_lock);
 
@@ -124,11 +125,11 @@ static ssize_t backlightnotification_status_write(struct device *dev,
 			if (bln_ongoing)
 				disable_led_notification();
 		} else {
-			pr_info("%s: invalid input range %u\n", __FUNCTION__,
+			pr_err("%s: invalid input range %u\n", __FUNCTION__,
 					data);
 		}
 	} else {
-		pr_info("%s: invalid input\n", __FUNCTION__);
+		pr_err("%s: invalid input\n", __FUNCTION__);
 	}
 
 	return size;
@@ -151,9 +152,9 @@ static ssize_t notification_led_status_write(struct device *dev,
 		else if (data == 0)
 			disable_led_notification();
 		else
-			pr_info("%s: wrong input %u\n", __FUNCTION__, data);
+			pr_err("%s: wrong input %u\n", __FUNCTION__, data);
 	} else {
-		pr_info("%s: input error\n", __FUNCTION__);
+		pr_err("%s: input error\n", __FUNCTION__);
 	}
 
 	return size;
@@ -173,10 +174,53 @@ static ssize_t in_kernel_blink_status_write(struct device *dev,
 	if (sscanf(buf, "%u\n", &data) == 1)
 		in_kernel_blink = !!(data);
 	else
-		pr_info("%s: input error\n", __FUNCTION__);
+		pr_err("%s: input error\n", __FUNCTION__);
 
 	return size;
 }
+
+static ssize_t blink_interval_status_read(struct device *dev,
+		struct device_attribute *attr, char *buf)
+{
+	return sprintf(buf,"%u %u\n", blink_on_msec, blink_off_msec);
+}
+
+static ssize_t blink_interval_status_write(struct device *dev,
+		struct device_attribute *attr, const char *buf, size_t size)
+{
+	unsigned int ms_on, ms_off;
+	int c;
+
+	c = sscanf(buf, "%u %u\n", &ms_on, &ms_off);
+	if (c == 1 || c == 2) {
+		blink_on_msec = ms_on;
+		blink_off_msec = (c == 2) ? ms_off : ms_on;
+	} else {
+		pr_err("%s:invalid input\n", __FUNCTION__);
+	}
+
+	return size;
+}
+
+static ssize_t max_blink_count_status_read(struct device *dev,
+		struct device_attribute *attr, char *buf)
+{
+	return sprintf(buf,"%u\n", max_blink_count);
+}
+
+static ssize_t max_blink_count_status_write(struct device *dev,
+		struct device_attribute *attr, const char *buf, size_t size)
+{
+	unsigned int data;
+
+	if (sscanf(buf, "%u\n", &data) == 1)
+		max_blink_count = data;
+	else
+		pr_err("%s: invalid input\n", __FUNCTION__);
+
+	return size;
+}
+
 static ssize_t blink_control_read(struct device *dev,
 		struct device_attribute *attr, char *buf)
 {
@@ -199,10 +243,10 @@ static ssize_t blink_control_write(struct device *dev,
 			bln_blink_state = 0;
 			bln_enable_backlights();
 		} else {
-			pr_info("%s: wrong input %u\n", __FUNCTION__, data);
+			pr_notice("%s: wrong input %u\n", __FUNCTION__, data);
 		}
 	} else {
-		pr_info("%s: input error\n", __FUNCTION__);
+		pr_err("%s: input error\n", __FUNCTION__);
 	}
 
 	return size;
@@ -225,6 +269,12 @@ static DEVICE_ATTR(notification_led, S_IRUGO | S_IWUGO,
 static DEVICE_ATTR(in_kernel_blink, S_IRUGO | S_IWUGO,
 		in_kernel_blink_status_read,
 		in_kernel_blink_status_write);
+static DEVICE_ATTR(blink_interval, S_IRUGO | S_IWUGO,
+		blink_interval_status_read,
+		blink_interval_status_write);
+static DEVICE_ATTR(max_blink_count, S_IRUGO | S_IWUGO,
+		max_blink_count_status_read,
+		max_blink_count_status_write);
 static DEVICE_ATTR(version, S_IRUGO , backlightnotification_version, NULL);
 
 static struct attribute *bln_notification_attributes[] = {
@@ -232,6 +282,8 @@ static struct attribute *bln_notification_attributes[] = {
 	&dev_attr_enabled.attr,
 	&dev_attr_notification_led.attr,
 	&dev_attr_in_kernel_blink.attr,
+	&dev_attr_blink_interval.attr,
+	&dev_attr_max_blink_count.attr,
 	&dev_attr_version.attr,
 	NULL
 };
@@ -261,25 +313,37 @@ EXPORT_SYMBOL(bln_is_ongoing);
 static void blink_callback(struct work_struct *blink_work)
 {
 	if (--blink_count == 0) {
-		pr_info("%s: notification timed out\n", __FUNCTION__);
+		pr_notice("%s: notification timed out\n", __FUNCTION__);
 		bln_enable_backlights();
-		del_timer(&blink_timer);
+		blink_cancel();
 		wake_unlock(&bln_wake_lock);
 		return;
 	}
 
-	if (bln_blink_state)
+	if (bln_blink_state) {
 		bln_enable_backlights();
-	else
+		blink_wait_msec = blink_off_msec;
+	} else {
 		bln_disable_backlights();
+		blink_wait_msec = blink_on_msec;
+	}
 
 	bln_blink_state = !bln_blink_state;
+}
+
+static void blink_cancel(void)
+{
+	if (timer_pending(&blink_timer))
+		del_timer_sync(&blink_timer);
+	in_kernel_blink = false;
+	bln_blink_state = 0;
+	bln_ongoing = false;
 }
 
 void bl_timer_callback(unsigned long data)
 {
 	schedule_work(&blink_work);
-	mod_timer(&blink_timer, jiffies + msecs_to_jiffies(BLINK_INTERVAL));
+	mod_timer(&blink_timer, jiffies + msecs_to_jiffies(blink_wait_msec));
 }
 
 static int __init bln_control_init(void)
