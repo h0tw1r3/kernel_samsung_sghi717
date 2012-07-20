@@ -4,8 +4,8 @@
 #define _LINUX_BLN_H
 
 struct bln_implementation {
-    void (*enable)(void);
-    void (*disable)(void);
+    bool (*enable)(void);
+    bool (*disable)(void);
 };
 
 void register_bln_implementation(struct bln_implementation *imp);

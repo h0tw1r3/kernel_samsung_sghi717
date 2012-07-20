@@ -19,40 +19,38 @@
 #include <linux/timer.h>
 #include <linux/wakelock.h>
 
-static bool bln_enabled = true; /* is BLN function is enabled */
-static bool bln_ongoing = false; /* ongoing LED Notification */
+static bool bln_enabled = false;      /* bln available */
+static bool bln_ongoing = false;      /* notification currently active */
+static bool bln_blink_active = false; /* is a blinking notification */
 static int bln_blink_state = 0;
-static bool bln_suspended = false; /* is system suspended */
-static struct bln_implementation *bln_imp = NULL;
-static bool in_kernel_blink = false;
+static bool bln_suspended = false;    /* is system suspended */
 static uint32_t blink_count;
+static uint32_t blink_on_msec = 500;
+static uint32_t blink_off_msec = 500;
+static uint32_t max_blink_count = 300;
 
+static struct bln_implementation *bln_imp = NULL;
 static struct wake_lock bln_wake_lock;
 
+static void bl_reset_light(void);
 void bl_timer_callback(unsigned long data);
 static struct timer_list blink_timer =
 		TIMER_INITIALIZER(bl_timer_callback, 0, 0);
 static void blink_callback(struct work_struct *blink_work);
 static DECLARE_WORK(blink_work, blink_callback);
-static void blink_cancel(void);
-
-static uint32_t blink_on_msec = 500;
-static uint32_t blink_off_msec = 500;
-static uint32_t blink_wait_msec = 0;
-static uint32_t max_blink_count = 300;
 
 #define BACKLIGHTNOTIFICATION_VERSION 9
 
 static void bln_enable_backlights(void)
 {
-	if (bln_imp)
-		bln_imp->enable();
+	bln_ongoing = (bln_imp) ? bln_imp->enable() : false;
+	pr_info("%s: %u\n", __FUNCTION__, (bln_ongoing ? 1 : 0));
 }
 
 static void bln_disable_backlights(void)
 {
-	if (bln_imp)
-		bln_imp->disable();
+	bln_ongoing = (bln_imp) ? bln_imp->disable() : false;
+	pr_info("%s: %u\n", __FUNCTION__, (bln_ongoing ? 1 : 0));
 }
 
 static void bln_early_suspend(struct early_suspend *h)
@@ -71,61 +69,76 @@ static struct early_suspend bln_suspend_data = {
 	.resume = bln_late_resume,
 };
 
-static void enable_led_notification(void)
+static void bln_blink_start(void)
 {
-	if (!bln_enabled)
-		return;
-
-	if (in_kernel_blink) {
+	if (bln_ongoing && !bln_blink_active) {
 		wake_lock(&bln_wake_lock);
 
-		/* Start timer */
+		bln_blink_state = 1;
+		bln_blink_active = true;
+
 		blink_timer.expires = jiffies +
-				msecs_to_jiffies(blink_on_msec);
+			msecs_to_jiffies(blink_on_msec);
 		blink_count = max_blink_count;
+
 		add_timer(&blink_timer);
+
+		pr_info("%s: notification led blink started\n", __FUNCTION__);
 	}
+}
+
+static void bln_blink_stop(void)
+{
+	bln_blink_active = false;
+}
+
+static void enable_led_notification(void)
+{
+	if (!bln_enabled || bln_is_ongoing())
+		return;
 
 	bln_enable_backlights();
+
 	pr_info("%s: notification led enabled\n", __FUNCTION__);
-	bln_ongoing = true;
 }
 
 static void disable_led_notification(void)
 {
+	if (!bln_ongoing)
+		return;
+
+	bln_ongoing = false;
+
+	/* If blink is active, let the timer handle it.  */
+	if (bln_blink_active)
+		return;
+
+	bl_reset_light();
+
 	pr_info("%s: notification led disabled\n", __FUNCTION__);
-
-	if (bln_suspended)
-		bln_disable_backlights();
-
-	blink_cancel();
-
-	wake_unlock(&bln_wake_lock);
-
 }
 
-static ssize_t backlightnotification_status_read(struct device *dev,
+static ssize_t enabled_status_read(struct device *dev,
 		struct device_attribute *attr, char *buf)
 {
 	return sprintf(buf, "%u\n", (bln_enabled ? 1 : 0));
 }
 
-static ssize_t backlightnotification_status_write(struct device *dev,
+static ssize_t enabled_status_write(struct device *dev,
 		struct device_attribute *attr, const char *buf, size_t size)
 {
 	unsigned int data;
 	if(sscanf(buf, "%u\n", &data) == 1) {
 		pr_devel("%s: %u \n", __FUNCTION__, data);
 		if (data == 1) {
-			pr_info("%s: BLN function enabled\n", __FUNCTION__);
+			pr_info("%s: bln function enabled\n", __FUNCTION__);
 			bln_enabled = true;
 		} else if (data == 0) {
-			pr_info("%s: BLN function disabled\n", __FUNCTION__);
+			pr_info("%s: bln function disabled\n", __FUNCTION__);
+			disable_led_notification();
 			bln_enabled = false;
-			if (bln_ongoing)
-				disable_led_notification();
 		} else {
-			pr_err("%s: invalid input range %u\n", __FUNCTION__,
+			pr_err("%s: invalid input %u\n", __FUNCTION__,
 					data);
 		}
 	} else {
@@ -160,25 +173,6 @@ static ssize_t notification_led_status_write(struct device *dev,
 	return size;
 }
 
-static ssize_t in_kernel_blink_status_read(struct device *dev,
-		struct device_attribute *attr, char *buf)
-{
-	return sprintf(buf,"%u\n", (in_kernel_blink ? 1 : 0));
-}
-
-static ssize_t in_kernel_blink_status_write(struct device *dev,
-		struct device_attribute *attr, const char *buf, size_t size)
-{
-	unsigned int data;
-
-	if (sscanf(buf, "%u\n", &data) == 1)
-		in_kernel_blink = !!(data);
-	else
-		pr_err("%s: input error\n", __FUNCTION__);
-
-	return size;
-}
-
 static ssize_t blink_interval_status_read(struct device *dev,
 		struct device_attribute *attr, char *buf)
 {
@@ -196,7 +190,7 @@ static ssize_t blink_interval_status_write(struct device *dev,
 		blink_on_msec = ms_on;
 		blink_off_msec = (c == 2) ? ms_off : ms_on;
 	} else {
-		pr_err("%s:invalid input\n", __FUNCTION__);
+		pr_err("%s: invalid input\n", __FUNCTION__);
 	}
 
 	return size;
@@ -232,18 +226,13 @@ static ssize_t blink_control_write(struct device *dev,
 {
 	unsigned int data;
 
-	if (!bln_ongoing)
-		return size;
-
 	if (sscanf(buf, "%u\n", &data) == 1) {
 		if (data == 1) {
-			bln_blink_state = 1;
-			bln_disable_backlights();
+			bln_blink_start();
 		} else if (data == 0) {
-			bln_blink_state = 0;
-			bln_enable_backlights();
+			bln_blink_stop();
 		} else {
-			pr_notice("%s: wrong input %u\n", __FUNCTION__, data);
+			pr_err("%s: input error %u\n", __FUNCTION__, data);
 		}
 	} else {
 		pr_err("%s: input error\n", __FUNCTION__);
@@ -252,7 +241,13 @@ static ssize_t blink_control_write(struct device *dev,
 	return size;
 }
 
-static ssize_t backlightnotification_version(struct device *dev,
+static ssize_t blink_count_read(struct device *dev,
+		struct device_attribute *attr, char *buf)
+{
+	return sprintf(buf, "%u\n", blink_count);
+}
+
+static ssize_t version_read(struct device *dev,
 		struct device_attribute *attr, char *buf)
 {
 	return sprintf(buf, "%u\n", BACKLIGHTNOTIFICATION_VERSION);
@@ -261,29 +256,27 @@ static ssize_t backlightnotification_version(struct device *dev,
 static DEVICE_ATTR(blink_control, S_IRUGO | S_IWUGO, blink_control_read,
 		blink_control_write);
 static DEVICE_ATTR(enabled, S_IRUGO | S_IWUGO,
-		backlightnotification_status_read,
-		backlightnotification_status_write);
+		enabled_status_read,
+		enabled_status_write);
 static DEVICE_ATTR(notification_led, S_IRUGO | S_IWUGO,
 		notification_led_status_read,
 		notification_led_status_write);
-static DEVICE_ATTR(in_kernel_blink, S_IRUGO | S_IWUGO,
-		in_kernel_blink_status_read,
-		in_kernel_blink_status_write);
 static DEVICE_ATTR(blink_interval, S_IRUGO | S_IWUGO,
 		blink_interval_status_read,
 		blink_interval_status_write);
 static DEVICE_ATTR(max_blink_count, S_IRUGO | S_IWUGO,
 		max_blink_count_status_read,
 		max_blink_count_status_write);
-static DEVICE_ATTR(version, S_IRUGO , backlightnotification_version, NULL);
+static DEVICE_ATTR(blink_count, S_IRUGO , blink_count_read, NULL);
+static DEVICE_ATTR(version, S_IRUGO , version_read, NULL);
 
 static struct attribute *bln_notification_attributes[] = {
 	&dev_attr_blink_control.attr,
 	&dev_attr_enabled.attr,
 	&dev_attr_notification_led.attr,
-	&dev_attr_in_kernel_blink.attr,
 	&dev_attr_blink_interval.attr,
 	&dev_attr_max_blink_count.attr,
+	&dev_attr_blink_count.attr,
 	&dev_attr_version.attr,
 	NULL
 };
@@ -305,45 +298,57 @@ EXPORT_SYMBOL(register_bln_implementation);
 
 bool bln_is_ongoing()
 {
-	return bln_ongoing;
+	return (bln_ongoing || bln_blink_active);
 }
 EXPORT_SYMBOL(bln_is_ongoing);
 
 
 static void blink_callback(struct work_struct *blink_work)
 {
-	if (--blink_count == 0) {
-		pr_notice("%s: notification timed out\n", __FUNCTION__);
-		bln_enable_backlights();
-		blink_cancel();
-		wake_unlock(&bln_wake_lock);
+	if (!bln_ongoing || !bln_blink_active) {
+		if (timer_pending(&blink_timer))
+			del_timer_sync(&blink_timer);
+
+		bln_blink_active = false;
+		bl_reset_light();
+		pr_info("%s: notification led blink stopped\n", __FUNCTION__);
+
+		if (wake_lock_active(&bln_wake_lock))
+			wake_unlock(&bln_wake_lock);
 		return;
 	}
 
-	if (bln_blink_state) {
-		bln_enable_backlights();
-		blink_wait_msec = blink_off_msec;
-	} else {
-		bln_disable_backlights();
-		blink_wait_msec = blink_on_msec;
+	if (--blink_count == 0) {
+		pr_notice("%s: notification timed out\n", __FUNCTION__);
+		disable_led_notification();
+		return;
 	}
 
+	if (!bln_blink_state) {
+		bln_enable_backlights();
+	} else {
+		bln_disable_backlights();
+	}
 	bln_blink_state = !bln_blink_state;
 }
 
-static void blink_cancel(void)
-{
-	if (timer_pending(&blink_timer))
-		del_timer_sync(&blink_timer);
-	in_kernel_blink = false;
-	bln_blink_state = 0;
-	bln_ongoing = false;
+/* helper for timer callback and disable functions */
+static void bl_reset_light(void) {
+	if (!bln_ongoing) {
+		if (bln_suspended)
+			bln_disable_backlights();
+		bln_ongoing = false;
+	} else {
+		if (!bln_blink_active && !bln_blink_state) {
+			bln_enable_backlights();
+		}
+	}
 }
 
 void bl_timer_callback(unsigned long data)
 {
 	schedule_work(&blink_work);
-	mod_timer(&blink_timer, jiffies + msecs_to_jiffies(blink_wait_msec));
+	mod_timer(&blink_timer, jiffies + msecs_to_jiffies((bln_blink_state) ? blink_off_msec : blink_on_msec));
 }
 
 static int __init bln_control_init(void)

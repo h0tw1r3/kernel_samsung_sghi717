@@ -907,24 +907,27 @@ static void disable_touchkey_backlights(void){
     i2c_touchkey_write(int_data, 1 );
 }
 
-static void cypress_touchkey_enable_led_notification(void){
+static bool cypress_touchkey_enable_led_notification(void){
     if( touchkey_enable != 1 ){
         tkey_vdd_enable(1);
         tkey_led_vdd_enable(1);
         touchkey_enable = 1;
         enable_touchkey_backlights();
+		return true;
     }
-    else
-        pr_info("%s, cannot set notification led, touchkeys are enabled\n", __FUNCTION__);
+	pr_info("%s, cannot set notification led, touchkeys are enabled\n", __FUNCTION__);
+	return false;
 }
 
-static void cypress_touchkey_disable_led_notification(void){
+static bool cypress_touchkey_disable_led_notification(void){
     if( touchkey_enable == 1 ){
         disable_touchkey_backlights();
         tkey_led_vdd_enable(0);
         tkey_vdd_enable(0);
         touchkey_enable = 0;
+		return true;
     }
+	return false;
 }
 
 static struct bln_implementation cypress_touchkey_bln = {
