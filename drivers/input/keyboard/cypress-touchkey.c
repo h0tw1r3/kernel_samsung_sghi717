@@ -617,7 +617,6 @@ static void melfas_touchkey_early_suspend(struct early_suspend *h)
     int index =0;
 #if defined(CONFIG_KOR_MODEL_SHV_E160L) || defined (CONFIG_USA_MODEL_SGH_I717)
     int ret = 0;
-    signed char int_data[] ={0x80};
 #endif
 
 #ifdef CONFIG_GENERIC_BLN
@@ -840,7 +839,7 @@ if(touchled_cmd_reversed) {
 		msleep(100);
 		if(!touchkey_enable )
 			touchkey_enable = 1;
-		i2c_touchkey_write(&touchkey_led_status, 1);
+		i2c_touchkey_write((u8*)&touchkey_led_status, 1);
 		printk("[TKEY] NOT RESERVED!! LED returned on touchkey_led_status = %d\n", touchkey_led_status);
 	}
 #endif
@@ -1405,7 +1404,6 @@ static int atoi(const char *name)
 #endif
 static ssize_t touch_led_control(struct device *dev, struct device_attribute *attr, const char *buf, size_t size)
 {
-	unsigned char data = NULL;
 	int int_data = 0;
 	int errnum = 0;
 #if defined(CONFIG_KOR_MODEL_SHV_E160L)
@@ -1450,11 +1448,11 @@ static ssize_t touch_led_control(struct device *dev, struct device_attribute *at
 
 #endif
 		if(g_debug_switch)
-			printk(KERN_DEBUG "touch_led_control int_data: %d  %d\n", int_data, data);
+			printk(KERN_DEBUG "touch_led_control int_data: %d  %s\n", int_data, buf);
 
 		#if defined(CONFIG_USA_MODEL_SGH_I717)
 			if(Q1_debug_msg)
-				printk(KERN_DEBUG "touch_led_control int_data: %d  %d\n", int_data, data);
+				printk(KERN_DEBUG "touch_led_control int_data: %d  %s\n", int_data, buf);
 		#endif
 		
 		errnum = i2c_touchkey_write((u8*)&int_data, 1);
@@ -1755,6 +1753,9 @@ static ssize_t touch_sensitivity_control(struct device *dev, struct device_attri
 	return size;
 }
 
+#if !(defined (CONFIG_USA_MODEL_SGH_T989) || defined(CONFIG_USA_MODEL_SGH_I727) || defined(CONFIG_USA_MODEL_SGH_I717) \
+|| defined (CONFIG_KOR_MODEL_SHV_E110S)|| defined(CONFIG_KOR_MODEL_SHV_E160L) || defined(CONFIG_CAN_MODEL_SGH_I757M)\
+|| defined(CONFIG_USA_MODEL_SGH_I757) || defined (CONFIG_USA_MODEL_SGH_T769) || defined(CONFIG_USA_MODEL_SGH_I577) || defined(CONFIG_CAN_MODEL_SGH_I577R))
 static ssize_t set_touchkey_firm_version_show(struct device *dev, struct device_attribute *attr, char *buf)
 {
 	/*TO DO IT */
@@ -1768,6 +1769,7 @@ static ssize_t set_touchkey_firm_version_show(struct device *dev, struct device_
 #endif
 	return count;
 }
+#endif
 
 static ssize_t set_touchkey_update_show(struct device *dev, struct device_attribute *attr, char *buf)
 {
@@ -2183,7 +2185,6 @@ static int __init touchkey_init(void)
 	
 #if defined (CONFIG_USA_MODEL_SGH_T769)
 	if(data[1] > 0x03 && data[1] < BUILTIN_FW_VER) {
-		extern int ISSP_main(int touchkey_pba_rev);
 		set_touchkey_debug('U');
 		while (retry--) {
 			if (ISSP_main(touchkey_pba_revision) == 0) {
@@ -2200,7 +2201,6 @@ static int __init touchkey_init(void)
 #elif defined(CONFIG_USA_MODEL_SGH_T989)//new touchkey fpcb
 	//update version "eclair/vendor/samsung/apps/Lcdtest/src/com/sec/android/app/lcdtest/touch_firmware.java"
 	if ((data[1] == 0x01) && (data[2] < 0x05)) {
-		extern int ISSP_main(int touchkey_pba_rev);
 		set_touchkey_debug('U');
 		while (retry--) {
 			if (ISSP_main(TOUCHKEY_PBA_REV_NA) == 0) {
@@ -2215,7 +2215,6 @@ static int __init touchkey_init(void)
 	}
 	else if (((data[1] != 0x0c) && (data[2] == 0x02) ) || ((((data[1] == 0x0) && (data[2] == 0x0) )||((data[1] == 0xff) && (data[2] == 0xff) ))&& (get_hw_rev() ==0x05 )))
 		{
-		extern int ISSP_main(int touchkey_pba_rev);
 		touchkey_pba_revision = TOUCHKEY_PBA_REV_02;
 		set_touchkey_debug('U');
 		while (retry--) {
@@ -2231,7 +2230,6 @@ static int __init touchkey_init(void)
 	}
 	else if (((data[1] < 0x0f) && (data[2] == 0x03) )  || ((((data[1] == 0x0) && (data[2] == 0x0) )||((data[1] == 0xff) && (data[2] == 0xff) ))&& (get_hw_rev() ==0x08 )))
 		{
-		extern int ISSP_main(int touchkey_pba_rev);
 		touchkey_pba_revision = TOUCHKEY_PBA_REV_03;
 		set_touchkey_debug('U');
 		while (retry--) {
@@ -2247,7 +2245,6 @@ static int __init touchkey_init(void)
 	}
 	else if (((data[1] < 0x11) && (data[2] == 0x04) )  || ((((data[1] == 0x0) && (data[2] == 0x0) )||((data[1] == 0xff) && (data[2] == 0xff) ))&& (get_hw_rev() >=0x09 )&&(get_hw_rev() <0x0d )))
 		{
-		extern int ISSP_main(int touchkey_pba_rev);
 		touchkey_pba_revision = TOUCHKEY_PBA_REV_04;
 		set_touchkey_debug('U');
 		while (retry--) {
@@ -2263,7 +2260,6 @@ static int __init touchkey_init(void)
 	}
 	else if (((data[1] < 0x13) && (data[2] == 0x05) )  || ((((data[1] == 0x0) && (data[2] == 0x0) )||((data[1] == 0xff) && (data[2] == 0xff) ))&& (get_hw_rev() >=0x0d )))
 		{
-		extern int ISSP_main(int touchkey_pba_rev);
 		touchkey_pba_revision = TOUCHKEY_PBA_REV_05;
 		set_touchkey_debug('U');
 		while (retry--) {
@@ -2291,10 +2287,9 @@ static int __init touchkey_init(void)
 	else if ((data[1] != 0x00) && (data[1] != 0x07) && (get_hw_rev() >=0x07)) // H/W rev0.3
 	{
 		printk("%s : I9210 update 3 tkey...\n",__func__);	
-		extern int ISSP_main(int touchkey_pba_rev);
 		set_touchkey_debug('U');
 		while (retry--) {
-			if (ISSP_main(NULL) == 0) {
+			if (ISSP_main(TOUCHKEY_PBA_REV_NA) == 0) {
 				printk("touchkey_update succeeded\n");
 				set_touchkey_debug('C');
 				break;
@@ -2312,10 +2307,9 @@ static int __init touchkey_init(void)
 #elif defined(CONFIG_USA_MODEL_SGH_I577) || defined(CONFIG_CAN_MODEL_SGH_I577R)
 	if (data[1] != BUIL_FW_VER) {
 		printk("%s : update 577 tkey...\n",__func__);	
-		extern int ISSP_main(int touchkey_pba_rev);
 		set_touchkey_debug('U');
 		while (retry--) {
-			if (ISSP_main(NULL) == 0) {
+			if (ISSP_main(TOUCHKEY_PBA_REV_NA) == 0) {
 				printk("touchkey_update succeeded\n");
 				set_touchkey_debug('C');
 				break;
@@ -2333,10 +2327,9 @@ static int __init touchkey_init(void)
 	 if (((data[1] < 0x07) && (data[2] == 0x15))|| ((((data[1] == 0x0) && (data[2] == 0x0) )||((data[1] == 0xff) && (data[2] == 0xff) ))&& ((get_hw_rev() >=0x05 )&& (get_hw_rev()<0x0a))))
 {
 		printk("%s : update 727 tkey...\n",__func__);	
-		extern int ISSP_main(int touchkey_pba_rev);
 		set_touchkey_debug('U');
 		while (retry--) {
-			if (ISSP_main(NULL) == 0) {
+			if (ISSP_main(TOUCHKEY_PBA_REV_NA) == 0) {
 				printk("touchkey_update succeeded\n");
 				set_touchkey_debug('C');
 				break;
@@ -2351,10 +2344,9 @@ static int __init touchkey_init(void)
 		else if (((data[1] == 0x09) && (data[2] == 0x18))|| ((((data[1] == 0x0) && (data[2] == 0x0) )||((data[1] == 0xff) && (data[2] == 0xff) ))&& (get_hw_rev() >=0x0a )))
 {
 		printk("%s : update 727 tkey...\n",__func__);	
-		extern int ISSP_main(int touchkey_pba_rev);
 		set_touchkey_debug('U');
 		while (retry--) {
-			if (ISSP_main(NULL) == 0) {
+			if (ISSP_main(TOUCHKEY_PBA_REV_NA) == 0) {
 				printk("touchkey_update succeeded\n");
 				set_touchkey_debug('C');
 				break;
@@ -2371,10 +2363,9 @@ static int __init touchkey_init(void)
 	if (data[1] != 0x04)//(((data[1] != 0x04) && (data[2] <= 0x2))|| ((((data[1] == 0x0) && (data[2] == 0x0) )||((data[1] == 0xff) && (data[2] == 0xff) ))))
     {
             printk("%s : update 727 tkey...\n",__func__);
-            extern int ISSP_main(int touchkey_pba_rev);
             set_touchkey_debug('U');
             while (retry--) {
-                if (ISSP_main(NULL) == 0) {
+                if (ISSP_main(TOUCHKEY_PBA_REV_NA) == 0) {
                     printk("touchkey_update succeeded\n");
                     set_touchkey_debug('C');
                     break;
@@ -2390,10 +2381,9 @@ static int __init touchkey_init(void)
 	else if (((data[1] < 0x09) && (data[2] == 0x18))|| ((((data[1] == 0x0) && (data[2] == 0x0) )||((data[1] == 0xff) && (data[2] == 0xff) ))&& (get_hw_rev() >=0x0a )))
 {
 		printk("%s : update 727 tkey...\n",__func__);	
-		extern int ISSP_main(int touchkey_pba_rev);
 		set_touchkey_debug('U');
 		while (retry--) {
-			if (ISSP_main(NULL) == 0) {
+			if (ISSP_main(TOUCHKEY_PBA_REV_NA) == 0) {
 				printk("touchkey_update succeeded\n");
 				set_touchkey_debug('C');
 				break;
@@ -2408,10 +2398,9 @@ static int __init touchkey_init(void)
 #elif defined (CONFIG_KOR_SHV_E120L_WXGA)
 	if ((data[1] != 0x05) || (data[2] != 0x00)) {
 printk("%s : update SHV_E120L_WXGA tkey...\n",__func__);	
-		extern int ISSP_main(int touchkey_pba_rev);
 		set_touchkey_debug('U');
 		while (retry--) {
-			if (ISSP_main(NULL) == 0) {
+			if (ISSP_main(TOUCHKEY_PBA_REV_NA) == 0) {
 				printk("touchkey_update succeeded\n");
 				set_touchkey_debug('C');
 				break;
@@ -2429,11 +2418,10 @@ printk("%s : update SHV_E120L_WXGA tkey...\n",__func__);
 /*
     if (get_hw_rev() >= 0x05) {
         if(data[1] < 0x07)  {
-            extern int ISSP_main(int touchkey_pba_rev);
             set_touchkey_debug('U');
             if (data[1] != 0x00) {
                 while (retry--) {
-                    if (ISSP_main(NULL) == 0) {
+                    if (ISSP_main(TOUCHKEY_PBA_REV_NA) == 0) {
                         printk("[TKEY] touchkey_init :: touchkey_update succeeded\n");
                         set_touchkey_debug('C');
                         break;
@@ -2471,10 +2459,9 @@ printk("%s : update SHV_E120L_WXGA tkey...\n",__func__);
 	|| ((get_hw_rev() >= 0x07) && (data[1] != 0x07))) //&& (data[2] == 0x03)))
 		{
 		   printk("%s : update E110S %d!!!...\n",__func__, get_hw_rev());
-			extern int ISSP_main(int touchkey_pba_rev);
 			set_touchkey_debug('U');
 			while (retry--) {
-				if (ISSP_main(NULL) == 0) {
+				if (ISSP_main(TOUCHKEY_PBA_REV_NA) == 0) {
 					printk("touchkey_update succeeded\n");
 					set_touchkey_debug('C');
 					break;
@@ -2499,10 +2486,9 @@ printk("%s : update SHV_E120L_WXGA tkey...\n",__func__);
 			if ((data[1] != 0x02) || (data[2] != 0x00))
 			{
 			   printk("%s : update SD-03D...\n",__func__);	
-				extern int ISSP_main(int touchkey_pba_rev);
 				set_touchkey_debug('U');
 				while (retry--) {
-					if (ISSP_main(NULL) == 0) {
+					if (ISSP_main(TOUCHKEY_PBA_REV_NA) == 0) {
 						printk("touchkey_update succeeded\n");
 						set_touchkey_debug('C');
 						break;
@@ -2522,7 +2508,6 @@ printk("%s : update SHV_E120L_WXGA tkey...\n",__func__);
 			if ((data[1] != 0x08) || (data[2] != 0x02))
 			{
 			   printk("%s : REV02 update SD-03D...\n",__func__);	
-				extern int ISSP_main(int touchkey_pba_rev);
 				set_touchkey_debug('U');
 				while (retry--) {
 					if (ISSP_main(TOUCHKEY_PBA_REV_02) == 0) {
@@ -2545,7 +2530,6 @@ printk("%s : update SHV_E120L_WXGA tkey...\n",__func__);
 			if ((data[1] != 0x02) || (data[2] != 0x00))
 			{
 			   printk("%s : REV04 update SD-03D...\n",__func__);	
-				extern int ISSP_main(int touchkey_pba_rev);
 				set_touchkey_debug('U');
 				while (retry--) {
 					if (ISSP_main(TOUCHKEY_PBA_REV_04) == 0) {
@@ -2568,7 +2552,6 @@ printk("%s : update SHV_E120L_WXGA tkey...\n",__func__);
 			if ((data[1] != 0x07) || (data[2] != 0x03)) // need to change
 			{
 				  printk("%s : after PCB REV04, update SD-03D...\n",__func__);
-				extern int ISSP_main(int touchkey_pba_rev);
 				set_touchkey_debug('U');
 				while (retry--) {
 					 if (ISSP_main(TOUCHKEY_PBA_REV_05) == 0) {
