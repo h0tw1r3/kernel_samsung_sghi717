@@ -5,9 +5,11 @@
 
 struct bln_implementation {
     bool (*enable)(void);
-    bool (*disable)(void);
+    void (*disable)(void);
+    void (*on)(void);
+    void (*off)(void);
 };
 
 void register_bln_implementation(struct bln_implementation *imp);
-bool bln_is_ongoing(void);
+void cancel_bln_activity(void);
 #endif

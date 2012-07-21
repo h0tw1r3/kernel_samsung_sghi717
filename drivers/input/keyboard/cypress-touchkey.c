@@ -2,7 +2,8 @@
  * Driver for keys on GPIO lines capable of generating interrupts.
  *
  * Copyright 2005 Phil Blundell
- * COpyright 2011 Michael Richter (alias neldar)
+ * Copyright 2011 Michael Richter (alias neldar)
+ * Copyright 2012 Jeffrey Clark <h0tw1r3@gmail.com>
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 as
@@ -29,7 +30,9 @@
 #include <asm/uaccess.h>
 #include <linux/earlysuspend.h>
 #include <asm/io.h>
+#if defined(CONFIG_GENERIC_BLN)
 #include <linux/bln.h>
+#endif
 #ifdef CONFIG_CPU_FREQ
 //#include <mach/cpu-freq-v210.h>  //temp ks
 #endif
@@ -263,7 +266,7 @@ static int i2c_touchkey_write(u8 * val, unsigned int len)
 	struct i2c_msg msg[1];
 	int retry = 2;
 
-	if ((touchkey_driver == NULL) || !(touchkey_enable == 1)) {
+	if (touchkey_driver == NULL) {
 		printk(KERN_DEBUG "[TKEY] touchkey is not enabled.W\n");
 		return -ENODEV;
 	}
@@ -619,19 +622,12 @@ static void melfas_touchkey_early_suspend(struct early_suspend *h)
     int ret = 0;
 #endif
 
-#ifdef CONFIG_GENERIC_BLN
-    if (bln_is_ongoing())
+    if (touchkey_enable < 0)
         return;
-#endif
 
     touchkey_enable = 0;
     set_touchkey_debug('S');
     printk(KERN_DEBUG "melfas_touchkey_early_suspend\n");
-
-    if (touchkey_enable < 0) {
-        printk("---%s---touchkey_enable: %d\n", __FUNCTION__, touchkey_enable);
-        return;
-    }
 
     disable_irq(IRQ_TOUCHKEY_INT);
 #if defined (CONFIG_USA_MODEL_SGH_I717)
@@ -733,6 +729,12 @@ static void melfas_touchkey_early_resume(struct early_suspend *h)
 #endif 	
 	set_touchkey_debug('R');
 	printk(KERN_DEBUG "[TKEY] melfas_touchkey_early_resume\n");
+
+#if defined(CONFIG_GENERIC_BLN)
+	if (touchkey_enable == -3) {
+		cancel_bln_activity();
+	} else
+#endif
 	if (touchkey_enable < 0) {
 		printk("[TKEY] %s touchkey_enable: %d\n", __FUNCTION__, touchkey_enable);
 		return;
@@ -896,43 +898,43 @@ schedule_delayed_work(&touch_resume_work, msecs_to_jiffies(500));
 }
 #endif				// End of CONFIG_HAS_EARLYSUSPEND
 
-static void enable_touchkey_backlights(void){
+#if defined(CONFIG_GENERIC_BLN)
+static void cypress_touchkey_enable_backlight(void) {
     signed char int_data[] ={0x10};
-    i2c_touchkey_write(int_data, 1 );
+    i2c_touchkey_write(int_data, 1);
 }
 
-static void disable_touchkey_backlights(void){
+static void cypress_touchkey_disable_backlight(void) {
     signed char int_data[] ={0x20};
-    i2c_touchkey_write(int_data, 1 );
+    i2c_touchkey_write(int_data, 1);
 }
 
-static bool cypress_touchkey_enable_led_notification(void){
-    if( touchkey_enable != 1 ){
-        tkey_vdd_enable(1);
-        tkey_led_vdd_enable(1);
-        touchkey_enable = 1;
-        enable_touchkey_backlights();
-		return true;
-    }
-	pr_info("%s, cannot set notification led, touchkeys are enabled\n", __FUNCTION__);
-	return false;
+static bool cypress_touchkey_enable_led_notification(void) {
+    if (touchkey_enable)
+        return false;
+
+    tkey_vdd_enable(1);
+    msleep(50);
+    tkey_led_vdd_enable(1);
+
+    touchkey_enable = -3;
+    return true;
 }
 
-static bool cypress_touchkey_disable_led_notification(void){
-    if( touchkey_enable == 1 ){
-        disable_touchkey_backlights();
-        tkey_led_vdd_enable(0);
-        tkey_vdd_enable(0);
-        touchkey_enable = 0;
-		return true;
-    }
-	return false;
+static void cypress_touchkey_disable_led_notification(void) {
+    tkey_led_vdd_enable(0);
+    tkey_vdd_enable(0);
+
+    touchkey_enable = 0;
 }
 
 static struct bln_implementation cypress_touchkey_bln = {
     .enable = cypress_touchkey_enable_led_notification,
     .disable = cypress_touchkey_disable_led_notification,
+    .on = cypress_touchkey_enable_backlight,
+    .off = cypress_touchkey_disable_backlight,
 };
+#endif
 
 extern int mcsdl_download_binary_data(void);
 static int i2c_touchkey_probe(struct i2c_client *client, const struct i2c_device_id *id)
@@ -1110,7 +1112,7 @@ if (get_hw_rev() >=0x02) {
 }
 #endif
 	set_touchkey_debug('K');
-#ifdef CONFIG_GENERIC_BLN
+#if defined(CONFIG_GENERIC_BLN)
     register_bln_implementation(&cypress_touchkey_bln);
 #endif
 	return 0;
