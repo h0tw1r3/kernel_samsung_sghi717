@@ -29,6 +29,7 @@
 
 #include "wacom_i2c_func.h"
 #include "wacom_i2c_flash.h"
+#include "wacom_i2c_extended_attributes.h"
 #include "wacom_i2c_coord_tables.h"
 
 #define WACOM_FW_PATH "/sdcard/firmware/wacom_firm.bin"
@@ -959,6 +960,10 @@ static int wacom_i2c_probe(struct i2c_client *client,
 		printk(KERN_ERR "Failed to create device file(%s)!\n", dev_attr_set_epen_module_on.attr.name);
 
 
+	ret = wacom_i2c_create_extended_attributes(sec_epen);
+	if (ret) {
+		printk(KERN_ERR "[E-PEN]: failed to create sysfs extended attributes\n");
+	}
 	
 	/*Request IRQ*/
 	if (wac_i2c->irq_flag) {
