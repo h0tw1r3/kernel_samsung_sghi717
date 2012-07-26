@@ -442,6 +442,12 @@ static ssize_t epen_rotation_store(struct device *dev,
 	return count;
 }
 
+static ssize_t epen_rotation_read(struct device *dev,
+		struct device_attribute *attr, char *buf)
+{
+	return sprintf(buf, "%u\n", screen_rotate);
+}
+
 static ssize_t epen_hand_store(struct device *dev,
 		struct device_attribute *attr, const char *buf, size_t count)
 {
@@ -458,6 +464,11 @@ static ssize_t epen_hand_store(struct device *dev,
 	return count;
 }
 
+static ssize_t epen_hand_read(struct device *dev,
+		struct device_attribute *attr, char *buf)
+{
+	return sprintf(buf, "%u\n", user_hand);
+}
 
 static ssize_t epen_reset_store(struct device *dev,
 		struct device_attribute *attr, const char *buf, size_t count)
@@ -704,8 +715,8 @@ static DEVICE_ATTR(epen_firm_update, S_IWUSR|S_IWGRP, NULL, epen_firmware_update
 static DEVICE_ATTR(epen_firm_update_status, S_IRUGO, epen_firm_update_status_show, NULL);		/* return firmware update status*/
 static DEVICE_ATTR(epen_firm_version, S_IRUGO, epen_firm_version_show, NULL);					/* return firmware version */
 
-static DEVICE_ATTR(epen_rotation, S_IWUSR|S_IWGRP, NULL, epen_rotation_store);					/* screen rotation */
-static DEVICE_ATTR(epen_hand, S_IWUSR|S_IWGRP, NULL, epen_hand_store);							/* hand type */
+static DEVICE_ATTR(epen_rotation, S_IRUGO|S_IWUSR|S_IWGRP, epen_rotation_read, epen_rotation_store);					/* screen rotation */
+static DEVICE_ATTR(epen_hand, S_IRUGO|S_IWUSR|S_IWGRP,epen_hand_read, epen_hand_store);							/* hand type */
 
 
 static DEVICE_ATTR(epen_reset, S_IWUSR|S_IWGRP, NULL, epen_reset_store);
